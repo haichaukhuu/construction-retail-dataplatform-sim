@@ -1,0 +1,35 @@
+services:
+  seed:
+    build: { context: ., dockerfile: Dockerfile.sim }
+    command: ["seed"]
+    entrypoint: ["npx", "tsx", "src/seed.ts"]
+    environment:
+      SIM_DATA_DIR: /data
+      SIM_SEED: ${SIM_SEED:-2026}
+      SIM_DAY: ${SIM_DAY:-2026-11-05}
+    volumes: [simdata:/data]
+
+  sim:
+    build: { context: ., dockerfile: Dockerfile.sim }
+    command: ["run", "--speed", "${SIM_SPEED:-120}"]
+    environment:
+      SIM_DATA_DIR: /data
+      DELIQ_WEBHOOK_URL: http://web:3000/api/webhooks/carrier
+    volumes: [simdata:/data]
+    depends_on:
+      seed: { condition: service_completed_successfully }
+      web: { condition: service_started }
+
+  web:
+    build: { context: ., dockerfile: web/Dockerfile }
+    ports: ["3000:3000"]
+    environment:
+      SIM_DATA_DIR: /data
+      MOCK_API_KEY: ${MOCK_API_KEY:-}
+    # rw is required: SQLite WAL readers need the -shm file. Writes are blocked by query_only.
+    volumes: [simdata:/data]
+    depends_on:
+      seed: { condition: service_completed_successfully }
+
+volumes:
+  simdata:

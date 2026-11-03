@@ -1,0 +1,26 @@
+{
+  "name": "deliq-sim",
+  "version": "1.0.0",
+  "description": "DelIQ mock source systems (ERP/WMS/TMS/carrier) + replay simulator",
+  "scripts": {
+    "seed": "tsx src/seed.ts",
+    "sim": "tsx src/sim.ts",
+    "export": "tsx src/export.ts",
+    "check": "tsx src/check.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@faker-js/faker": "^10.6.0",
+    "better-sqlite3": "^13.0.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "private": true
+}

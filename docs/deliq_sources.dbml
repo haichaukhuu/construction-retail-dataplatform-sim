@@ -1,0 +1,258 @@
+// DelIQ mock source systems: ERP, WMS, TMS + carrier feed
+// Render: paste into https://dbdiagram.io/d (free) or use the dbml-renderer CLI
+Project deliq_sources {
+  database_type: 'SQLite'
+  Note: 'Three separate databases (erp.db, wms.db, tms.db). Cross-system links are soft, via ID normalisation in the DelIQ adapter.'
+}
+
+// ───────────────────────── ERP ─────────────────────────
+Table distribution_centers {
+  dc_id text [pk, note: 'DC-SE-01']
+  name text [not null]
+  city text [not null]
+}
+
+Table customers {
+  customer_id text [pk, note: 'C-000123']
+  name text [not null]
+  customer_type text [not null, note: 'B2B | B2C']
+  tier text [not null, default: 'STANDARD', note: 'STRATEGIC | KEY | STANDARD']
+  sla_hours integer [note: 'B2B only']
+  late_penalty_eur real [default: 0]
+  email text
+  phone text
+  preferred_lang text [not null, default: 'sv']
+  created_at text [not null]
+}
+
+Table sites {
+  site_id text [pk, note: 'S-004521']
+  customer_id text [not null]
+  address text [not null]
+  postcode text [not null]
+  city text [not null]
+  latitude real
+  longitude real
+  access_notes text
+  site_contact text
+  site_phone text
+}
+
+Table products {
+  sku text [pk, note: 'SKU-PLY-18-2400']
+  description text [not null]
+  category text [not null]
+  is_bulky integer [not null, default: 0]
+  unit_weight_kg real
+  unit_price_eur real [not null]
+}
+
+Table orders {
+  order_id text [pk, note: 'ORD-10432']
+  customer_id text [not null]
+  site_id text
+  dc_id text [not null]
+  order_date text [not null]
+  promised_date text [not null]
+  window_start text
+  window_end text
+  delivery_method text [not null, default: 'DELIVERY']
+  order_value_eur real [not null]
+  status text [not null, note: 'OPEN | CONFIRMED | RELEASED | DISPATCHED | DELIVERED | CANCELLED']
+  updated_at text [not null]
+  indexes {
+    updated_at
+    customer_id
+    promised_date
+  }
+}
+
+Table order_lines {
+  line_id integer [pk, increment]
+  order_id text [not null]
+  line_no integer [not null]
+  sku text [not null]
+  qty_ordered integer [not null]
+  unit_price_eur real [not null]
+  indexes {
+    (order_id, line_no) [unique]
+  }
+}
+
+Ref: sites.customer_id > customers.customer_id
+Ref: orders.customer_id > customers.customer_id
+Ref: orders.site_id > sites.site_id
+Ref: orders.dc_id > distribution_centers.dc_id
+Ref: order_lines.order_id > orders.order_id
+Ref: order_lines.sku > products.sku
+
+// ───────────────────────── WMS ─────────────────────────
+Table wms_orders {
+  wms_order_no integer [pk]
+  ext_ref text [not null, unique, note: '10432 = ERP ORD-10432 without prefix']
+  dc_code text [not null, note: 'SE01']
+  wave_id text
+  status text [not null, note: 'NEW | ALLOCATED | PICKING | PICKED | SHORT | STAGED | LOADED']
+  cutoff_at text [note: 'latest load time to make the route']
+  created_at text [not null]
+  updated_at text [not null]
+}
+
+Table stock {
+  dc_code text [not null]
+  sku text [not null]
+  on_hand integer [not null, default: 0]
+  allocated integer [not null, default: 0]
+  damaged integer [not null, default: 0]
+  last_counted_at text
+  updated_at text [not null]
+  indexes {
+    (dc_code, sku) [pk]
+  }
+}
+
+Table pick_tasks {
+  task_id integer [pk, increment]
+  wms_order_no integer [not null]
+  sku text [not null]
+  qty_required integer [not null]
+  qty_picked integer [not null, default: 0]
+  status text [not null, default: 'OPEN', note: 'OPEN | DONE | SHORT']
+  short_reason text [note: 'STOCKOUT | DAMAGED | MISLOCATED | COUNT_ERROR']
+  picker_id text
+  picked_at text
+}
+
+Table dispatch_events {
+  event_id integer [pk, increment]
+  wms_order_no integer [not null]
+  event_type text [not null, note: 'STAGED | LOADED | HANDED_TO_CARRIER']
+  dock text
+  trailer_no text
+  event_ts text [not null]
+}
+
+Table replenishments {
+  replen_id integer [pk, increment]
+  dc_code text [not null]
+  sku text [not null]
+  qty integer [not null]
+  expected_at text [not null]
+  status text [not null, default: 'EXPECTED', note: 'EXPECTED | RECEIVED | DELAYED']
+}
+
+Ref: pick_tasks.wms_order_no > wms_orders.wms_order_no
+Ref: dispatch_events.wms_order_no > wms_orders.wms_order_no
+
+// ───────────────────────── TMS ─────────────────────────
+Table carriers {
+  carrier_id text [pk, note: 'CAR-01']
+  name text [not null]
+  integration text [not null, note: 'API | WEBHOOK | CSV']
+  on_time_rating real [note: 'historical 0..1']
+}
+
+Table vehicles {
+  vehicle_id text [pk]
+  carrier_id text [not null]
+  plate text [not null]
+  vehicle_type text [not null, note: 'CRANE_TRUCK | VAN | FLATBED']
+  capacity_kg integer [not null]
+  has_crane integer [not null, default: 0]
+}
+
+Table routes {
+  route_id text [pk, note: 'RT-20261109-03']
+  dc_code text [not null]
+  route_date text [not null]
+  vehicle_id text
+  driver_name text
+  planned_start text
+  status text [not null, default: 'PLANNED', note: 'PLANNED | STARTED | COMPLETED | CANCELLED | BREAKDOWN']
+}
+
+Table shipments {
+  shipment_id text [pk, note: 'SHP-88-10432']
+  order_ref text [not null, note: 'ORD10432 (no hyphen)']
+  route_id text
+  carrier_id text [not null]
+  tracking_id text [not null, unique]
+  stop_seq integer
+  planned_eta text [not null]
+  current_eta text [note: 'NULL = Status Unknown']
+  status text [not null, note: 'PLANNED | TENDERED | IN_TRANSIT | OUT_FOR_DELIVERY | DELIVERED | FAILED | RETURNED']
+  updated_at text [not null]
+}
+
+Table milestones {
+  milestone_id integer [pk, increment]
+  shipment_id text [not null]
+  milestone_type text [not null, note: 'PICKED_UP | DEPARTED_DC | ARRIVED_HUB | OUT_FOR_DELIVERY | DELIVERED']
+  planned_at text [not null]
+  actual_at text [note: 'NULL until it happens']
+}
+
+Table delivery_attempts {
+  attempt_id integer [pk, increment]
+  shipment_id text [not null]
+  attempt_no integer [not null, default: 1]
+  outcome text [not null, note: 'DELIVERED | FAILED']
+  failure_reason text [note: 'SITE_CLOSED | NO_ACCESS | WRONG_ADDRESS | DAMAGED | REFUSED']
+  signed_by text
+  attempted_at text [not null]
+}
+
+Table carrier_events {
+  event_id integer [pk, increment]
+  carrier_id text [not null]
+  tracking_id text [not null]
+  event_code text [not null, note: 'PU | DEP | ARR | OFD | DEL | EXC']
+  event_ts text [not null]
+  location text
+  note text
+  raw_json text
+  received_at text [not null]
+}
+
+Ref: vehicles.carrier_id > carriers.carrier_id
+Ref: routes.vehicle_id > vehicles.vehicle_id
+Ref: shipments.route_id > routes.route_id
+Ref: shipments.carrier_id > carriers.carrier_id
+Ref: milestones.shipment_id > shipments.shipment_id
+Ref: delivery_attempts.shipment_id > shipments.shipment_id
+Ref: carrier_events.carrier_id > carriers.carrier_id
+
+// ─────────────── Soft cross-system links (no real FK) ───────────────
+// Delete these lines if you want three clean, separate diagrams.
+Ref: wms_orders.ext_ref - orders.order_id [note: 'normalised order id']
+Ref: shipments.order_ref - orders.order_id [note: 'normalised order id']
+Ref: carrier_events.tracking_id > shipments.tracking_id [note: 'carrier feed join']
+Ref: stock.sku > products.sku [note: 'soft link']
+
+// ───────────────────────── Grouping ─────────────────────────
+TableGroup ERP {
+  distribution_centers
+  customers
+  sites
+  products
+  orders
+  order_lines
+}
+
+TableGroup WMS {
+  wms_orders
+  stock
+  pick_tasks
+  dispatch_events
+  replenishments
+}
+
+TableGroup TMS_and_Carrier {
+  carriers
+  vehicles
+  routes
+  shipments
+  milestones
+  delivery_attempts
+  carrier_events
+}
