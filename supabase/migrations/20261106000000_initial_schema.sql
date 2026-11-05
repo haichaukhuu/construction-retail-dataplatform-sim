@@ -2,7 +2,7 @@ CREATE SCHEMA IF NOT EXISTS core;
 CREATE SCHEMA IF NOT EXISTS commercial;
 CREATE SCHEMA IF NOT EXISTS operations;
 
-CREATE TABLE core.distribution_centers (
+CREATE TABLE IF NOT EXISTS core.distribution_centers (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     code TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
@@ -11,7 +11,7 @@ CREATE TABLE core.distribution_centers (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE core.customers (
+CREATE TABLE IF NOT EXISTS core.customers (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     customer_number TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE core.customers (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE core.delivery_sites (
+CREATE TABLE IF NOT EXISTS core.delivery_sites (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     customer_id BIGINT NOT NULL REFERENCES core.customers(id) ON DELETE CASCADE,
     site_name TEXT,
@@ -36,9 +36,9 @@ CREATE TABLE core.delivery_sites (
     contact_phone TEXT,
     UNIQUE (id, customer_id)
 );
-CREATE INDEX idx_delivery_sites_customer_id ON core.delivery_sites(customer_id);
+CREATE INDEX IF NOT EXISTS idx_delivery_sites_customer_id ON core.delivery_sites(customer_id);
 
-CREATE TABLE core.products (
+CREATE TABLE IF NOT EXISTS core.products (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     sku TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
@@ -49,13 +49,13 @@ CREATE TABLE core.products (
     is_active BOOLEAN NOT NULL DEFAULT TRUE
 );
 
-CREATE TABLE core.carriers (
+CREATE TABLE IF NOT EXISTS core.carriers (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     code TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL
 );
 
-CREATE TABLE commercial.sales_orders (
+CREATE TABLE IF NOT EXISTS commercial.sales_orders (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     order_number TEXT NOT NULL UNIQUE,
     customer_id BIGINT NOT NULL REFERENCES core.customers(id),
@@ -71,10 +71,10 @@ CREATE TABLE commercial.sales_orders (
         REFERENCES core.delivery_sites(id, customer_id),
     CONSTRAINT check_promised_window CHECK (promised_window_end > promised_window_start)
 );
-CREATE INDEX idx_sales_orders_customer_id ON commercial.sales_orders(customer_id);
-CREATE INDEX idx_sales_orders_dc_window ON commercial.sales_orders(distribution_center_id, promised_window_end);
+CREATE INDEX IF NOT EXISTS idx_sales_orders_customer_id ON commercial.sales_orders(customer_id);
+CREATE INDEX IF NOT EXISTS idx_sales_orders_dc_window ON commercial.sales_orders(distribution_center_id, promised_window_end);
 
-CREATE TABLE commercial.sales_order_lines (
+CREATE TABLE IF NOT EXISTS commercial.sales_order_lines (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     sales_order_id BIGINT NOT NULL REFERENCES commercial.sales_orders(id) ON DELETE CASCADE,
     product_id BIGINT NOT NULL REFERENCES core.products(id),
@@ -84,9 +84,9 @@ CREATE TABLE commercial.sales_order_lines (
     UNIQUE (sales_order_id, line_number),
     UNIQUE (sales_order_id, product_id)
 );
-CREATE INDEX idx_sales_order_lines_product_id ON commercial.sales_order_lines(product_id);
+CREATE INDEX IF NOT EXISTS idx_sales_order_lines_product_id ON commercial.sales_order_lines(product_id);
 
-CREATE TABLE operations.inventory_balances (
+CREATE TABLE IF NOT EXISTS operations.inventory_balances (
     distribution_center_id BIGINT NOT NULL REFERENCES core.distribution_centers(id),
     product_id BIGINT NOT NULL REFERENCES core.products(id),
     on_hand_quantity NUMERIC(12,3) NOT NULL DEFAULT 0 CHECK (on_hand_quantity >= 0),
@@ -95,9 +95,9 @@ CREATE TABLE operations.inventory_balances (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (distribution_center_id, product_id)
 );
-CREATE INDEX idx_inventory_balances_product_id ON operations.inventory_balances(product_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_balances_product_id ON operations.inventory_balances(product_id);
 
-CREATE TABLE operations.fulfillments (
+CREATE TABLE IF NOT EXISTS operations.fulfillments (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     sales_order_id BIGINT NOT NULL UNIQUE REFERENCES commercial.sales_orders(id) ON DELETE CASCADE,
     status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'PICKING', 'PICKED', 'STAGED', 'CANCELLED')),
@@ -105,7 +105,7 @@ CREATE TABLE operations.fulfillments (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE operations.fulfillment_lines (
+CREATE TABLE IF NOT EXISTS operations.fulfillment_lines (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     fulfillment_id BIGINT NOT NULL REFERENCES operations.fulfillments(id) ON DELETE CASCADE,
     sales_order_line_id BIGINT NOT NULL REFERENCES commercial.sales_order_lines(id),
@@ -113,9 +113,9 @@ CREATE TABLE operations.fulfillment_lines (
     short_reason TEXT CHECK (short_reason IN ('STOCKOUT', 'DAMAGED', 'MISLOCATED', 'COUNT_ERROR')),
     UNIQUE (fulfillment_id, sales_order_line_id)
 );
-CREATE INDEX idx_fulfillment_lines_sol_id ON operations.fulfillment_lines(sales_order_line_id);
+CREATE INDEX IF NOT EXISTS idx_fulfillment_lines_sol_id ON operations.fulfillment_lines(sales_order_line_id);
 
-CREATE TABLE operations.deliveries (
+CREATE TABLE IF NOT EXISTS operations.deliveries (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     fulfillment_id BIGINT NOT NULL UNIQUE REFERENCES operations.fulfillments(id) ON DELETE CASCADE,
     delivery_number TEXT NOT NULL UNIQUE,
@@ -135,7 +135,7 @@ CREATE TABLE operations.deliveries (
         OR (status != 'DELIVERED' AND delivered_at IS NULL)
     )
 );
-CREATE INDEX idx_deliveries_carrier_id ON operations.deliveries(carrier_id);
+CREATE INDEX IF NOT EXISTS idx_deliveries_carrier_id ON operations.deliveries(carrier_id);
 
 CREATE OR REPLACE VIEW commercial.v_order_totals AS
 SELECT sales_order_id, SUM(quantity_ordered * unit_price) AS total_amount

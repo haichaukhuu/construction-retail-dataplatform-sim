@@ -50,6 +50,36 @@ If the schema was already created manually in the hosted project, do not apply t
 
 Do not delete a production database merely to resolve migration history.
 
+### Existing tables are preserved
+
+The initial migration uses `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS`. If a table already exists, Supabase leaves that table, its rows, and its existing definition unchanged. The migration only creates missing objects and refreshes the two views.
+
+Therefore this error is avoided:
+
+```text
+ERROR: relation "distribution_centers" already exists
+```
+
+If Supabase still reports the migration as pending, first inspect the migration list:
+
+```powershell
+supabase migration list
+```
+
+Run `supabase db push` from the repository root. If the hosted project already has the same schema and the migration is marked pending, you can mark only this migration as applied:
+
+```powershell
+supabase migration repair --status applied 20261106000000
+```
+
+`migration repair` changes migration history only; it does not delete or recreate tables.
+
+If the existing schema differs, do not baseline it. Create a new migration containing the required `ALTER TABLE` statements. If the project contains no data worth keeping, the simpler alternative is to reset/drop the mock schemas and then run:
+
+```powershell
+supabase db push
+```
+
 ## Setup
 
 1. Connect the repository using the Supabase GitHub Integration.
