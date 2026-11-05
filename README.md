@@ -161,7 +161,7 @@ The function deletes only daily business data:
 
 It does not delete `core.customers`, `core.delivery_sites`, `core.products`, `core.carriers`, or `core.distribution_centers`.
 
-The scenario SQL is in [supabase/scenarios/daily_business_day.sql](supabase/scenarios/daily_business_day.sql). The migration installs it through [20261106000002_daily_business_day.sql](supabase/migrations/20261106000002_daily_business_day.sql).
+The scenario SQL is in [supabase/scenarios/daily_business_day.sql](supabase/scenarios/daily_business_day.sql), and the migration contains an inline copy in [20261106000002_daily_business_day.sql](supabase/migrations/20261106000002_daily_business_day.sql). The migration is intentionally duplicated because Supabase migration runners execute SQL and do not support `psql` meta-commands such as `\ir`.
 
 Use a trigger for event reactions such as creating a fulfillment after an order insert. Do not use a trigger as the daily clock: triggers run only when a row changes. `pg_cron` is the correct Supabase-native scheduler.
 
