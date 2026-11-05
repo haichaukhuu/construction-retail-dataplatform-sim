@@ -120,23 +120,50 @@ python -m scripts.seed_data
 python -m scripts.simulate --steps 1
 ```
 
-## GitHub Actions daily simulation
+## Responsibilities
 
-Add these repository secrets under **Settings > Secrets and variables > Actions**:
+1. **Supabase GitHub Integration** deploys schema and scenario functions from `supabase/migrations`.
+2. **Supabase `pg_cron`** runs the daily business scenario inside the database.
+3. **Python scripts** remain optional local development tools and are not required in production.
 
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
+No GitHub Actions pipeline is required for daily simulation.
 
-The workflow in `.github/workflows/daily-simulation.yml` runs at 01:00 UTC every day and can also be started manually with **Run workflow**. It resets the mock database before each run, so the Supabase database contains one fresh simulated business day rather than accumulated history.
+## Database-native daily scenario
 
-The workflow has a concurrency lock so two resets cannot run at the same time. It uses the service-role key only in GitHub Actions and never places that key in migration files or browser code.
+The scenario can run entirely inside Supabase without GitHub Actions:
 
-This two-part setup is intentional:
+1. Enable the `pg_cron` extension in **Database > Extensions**.
+2. Apply the migration that installs the scenario function.
+3. Test it manually:
 
-1. **Supabase GitHub Integration** deploys schema and view changes from `supabase/migrations`.
-2. **GitHub Actions** runs Python business activity and exceptions because migrations are not a scheduler or data generator.
+```sql
+SELECT operations.run_daily_business_day(30);
+```
 
-For production-like event history, use a separate append-only event table or Supabase Edge Function with `pg_cron`. For this mock platform, the GitHub Action is simpler and easier to inspect.
+4. Create the daily schedule in the SQL Editor:
+
+```sql
+SELECT cron.schedule(
+  'construction-retail-daily-simulation',
+  '0 1 * * *',
+  $$SELECT operations.run_daily_business_day(30);$$
+);
+```
+
+The function deletes only daily business data:
+
+- `commercial.sales_orders`
+- `commercial.sales_order_lines`
+- `operations.inventory_balances`
+- `operations.fulfillments`
+- `operations.fulfillment_lines`
+- `operations.deliveries`
+
+It does not delete `core.customers`, `core.delivery_sites`, `core.products`, `core.carriers`, or `core.distribution_centers`.
+
+The scenario SQL is in [supabase/scenarios/daily_business_day.sql](supabase/scenarios/daily_business_day.sql). The migration installs it through [20261106000002_daily_business_day.sql](supabase/migrations/20261106000002_daily_business_day.sql).
+
+Use a trigger for event reactions such as creating a fulfillment after an order insert. Do not use a trigger as the daily clock: triggers run only when a row changes. `pg_cron` is the correct Supabase-native scheduler.
 
 ## Recommended event extensions
 
