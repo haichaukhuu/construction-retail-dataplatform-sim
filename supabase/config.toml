@@ -1,0 +1,14 @@
+# Local Supabase CLI configuration.
+# Link to a hosted project explicitly with:
+# supabase link --project-ref <your-project-ref>
+
+[api]
+enabled = true
+schemas = ["public", "graphql_public", "core", "commercial", "operations"]
+
+[db]
+port = 54322
+
+[studio]
+enabled = true
+port = 54323

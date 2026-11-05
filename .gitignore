@@ -3,3 +3,6 @@ data
 exports
 dist
 .vscode/
+.env
+__pycache__/
+*.py[cod]
