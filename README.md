@@ -1,11 +1,12 @@
 # Construction retail data platform simulator
 
-This project models a Swedish construction-retail flow:
+Simulates a Swedish construction-retail flow in Supabase:
 
 `customer/order -> inventory reservation -> picking -> staging -> dispatch -> delivery`
 
-## What the mock data represents
+Data covers three distribution centers (Stockholm, Gothenburg, Malmo), B2B/B2C customers, five product categories, and 30 orders with stockouts, short picks, ETA changes, and failed deliveries.
 
+<<<<<<< HEAD
 - Three distribution centers: Stockholm, Gothenburg, and Malmo.
 - B2B strategic/key accounts and B2C erp_customers, each with a delivery site.
 - Timber, plasterboard, cement, insulation, and tools with realistic weights and units.
@@ -58,14 +59,29 @@ Therefore this error is avoided:
 
 ```text
 ERROR: relation "wms_distribution_centers" already exists
+=======
+## How it works
+
+```text
+mock_data/                          you edit these
+  master/*.csv                      centers, carriers, products, customers, sites, inventory
+  events/*.csv                      orders, order lines, deliveries, delivery events
+  config/refresh_policy.json        refresh schedule and reset mode
+        |  python -m scripts.build_sql   (GitHub Actions runs this on push to main)
+        v
+supabase/
+  seed/01_master_data.sql           generated
+  seed/02_events.sql                generated
+  scenarios/refresh_demo_environment.sql   generated: refresh function + pg_cron schedule
+  migrations/                       table schema (hand-written)
+>>>>>>> d065816f70efae27c821ced11ed405fd1e6a1532
 ```
 
-If Supabase still reports the migration as pending, first inspect the migration list:
+Never edit generated SQL; change `mock_data/` and rebuild.
 
-```powershell
-supabase migration list
-```
+## Quick start
 
+<<<<<<< HEAD
 Run `supabase db push` from the repository root. If the hosted project already has the same schema and the migration is marked pending, you can mark only this migration as applied:
 
 ```powershell
@@ -135,23 +151,23 @@ The scenario can run entirely inside Supabase without GitHub Actions:
 1. Enable the `pg_cron` extension in **Database > Extensions**.
 2. Apply the migration that installs the scenario function.
 3. Test it manually:
+=======
+1. **Create the schema.** Connect the repo with the Supabase GitHub Integration (Project Settings > Integrations), working directory `.`. Or run `supabase link --project-ref <ref>` then `supabase db push`. Expose `core`, `commercial`, and `operations` under API settings > Exposed schemas.
+2. **Enable `pg_cron`** in Database > Extensions.
+3. **Load data and schedule the refresh.** Run `supabase/scenarios/refresh_demo_environment.sql` in the SQL Editor, then:
+>>>>>>> d065816f70efae27c821ced11ed405fd1e6a1532
 
 ```sql
-SELECT operations.run_daily_business_day(30);
+SELECT operations.refresh_demo_environment();
 ```
 
-4. Create the daily schedule in the SQL Editor:
+4. **Observe** the results in `operations.v_delivery_overview`.
 
-```sql
-SELECT cron.schedule(
-  'construction-retail-daily-simulation',
-  '0 1 * * *',
-  $$SELECT operations.run_daily_business_day(30);$$
-);
-```
+## Configuration
 
-The function deletes only daily business data:
+Edit [mock_data/config/refresh_policy.json](mock_data/config/refresh_policy.json):
 
+<<<<<<< HEAD
 - `commercial.erp_sales_orders`
 - `commercial.erp_sales_order_lines`
 - `operations.wms_inventory_balances`
@@ -160,11 +176,24 @@ The function deletes only daily business data:
 - `operations.tms_deliveries`
 
 It does not delete `core.erp_customers`, `core.erp_delivery_sites`, `core.erp_products`, `core.tms_carriers`, or `core.wms_distribution_centers`.
+=======
+| Key | Meaning |
+| --- | --- |
+| `schedule_cron` | 5-field cron expression, e.g. `0 1 * * *` for daily at 01:00 UTC |
+| `reset_mode` | `EVENTS_ONLY` clears orders, fulfillments, deliveries, inventory and keeps master data. `FULL` also clears and reloads master data. |
+| `enabled` | `false` unschedules the job |
+| `job_name` | `pg_cron` job name |
 
-The scenario SQL is in [supabase/scenarios/daily_business_day.sql](supabase/scenarios/daily_business_day.sql), and the migration contains an inline copy in [20261106000002_daily_business_day.sql](supabase/migrations/20261106000002_daily_business_day.sql). The migration is intentionally duplicated because Supabase migration runners execute SQL and do not support `psql` meta-commands such as `\ir`.
+Override the mode for one run: `SELECT operations.refresh_demo_environment('FULL');`
+>>>>>>> d065816f70efae27c821ced11ed405fd1e6a1532
 
-Use a trigger for event reactions such as creating a fulfillment after an order insert. Do not use a trigger as the daily clock: triggers run only when a row changes. `pg_cron` is the correct Supabase-native scheduler.
+## Change the data
 
+1. Edit the CSVs. Event times are hour offsets from today 00:00 UTC.
+2. Run `python -m scripts.build_sql` (`--check` verifies the SQL is current), or push to `main` and let the workflow commit the result.
+3. Re-run `refresh_demo_environment.sql` in Supabase.
+
+<<<<<<< HEAD
 ## DelIQ fit review
 
 The current model is intentionally small but has the right subdomain boundaries:
@@ -190,10 +219,12 @@ warehouse fulfilment and stock, and `tms_*` represents carrier and delivery
 execution.
 
 ## Recommended event extensions
+=======
+Delivery event types: `PICK_STARTED`, `PICK_SHORT`, `PICKED`, `STAGED`, `DISPATCHED`, `ETA_CHANGED`, `DELIVERED`, `FAILED`.
+>>>>>>> d065816f70efae27c821ced11ed405fd1e6a1532
 
-For a richer demo, add a separate append-only `operations.event_log` table or Supabase Realtime listeners for:
+## Notes
 
-- `ORDER_CONFIRMED`, `STOCK_RESERVED`, `PICK_SHORT`, `FULFILLMENT_STAGED`
-- `DELIVERY_DISPATCHED`, `ETA_CHANGED`, `DELIVERY_FAILED`, `DELIVERY_DELIVERED`
-
-Keep the current tables as the operational state and use the event log for audit/history. This avoids overloading status columns when demonstrating analytics or alerts.
+- The schema migration uses `CREATE ... IF NOT EXISTS`, so existing tables and rows are preserved. If the hosted schema already matches and the migration shows as pending, run `supabase migration repair --status applied 20261106000000`. If the schema differs, add a new `ALTER TABLE` migration.
+- The earlier `run_daily_business_day` function ([supabase/scenarios/daily_business_day.sql](supabase/scenarios/daily_business_day.sql)) and the Python scripts in `scripts/` and `scenarios/` are legacy. Unschedule the old `construction-retail-daily-simulation` job if you use the new refresh job.
+- Python scripts need `.env` with `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (never commit it) and `pip install -r requirements.txt`.

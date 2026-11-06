@@ -1,0 +1,31 @@
+name: Build seed SQL
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - mock_data/**
+      - scripts/build_sql.py
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m scripts.build_sql
+      - name: Commit generated SQL
+        run: |
+          if [ -n "$(git status --porcelain supabase/seed supabase/scenarios)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add supabase/seed supabase/scenarios
+            git commit -m "chore: regenerate seed SQL from mock_data"
+            git push
+          fi
