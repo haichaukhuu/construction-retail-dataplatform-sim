@@ -7,11 +7,11 @@ This project models a Swedish construction-retail flow:
 ## What the mock data represents
 
 - Three distribution centers: Stockholm, Gothenburg, and Malmo.
-- B2B strategic/key accounts and B2C customers, each with a delivery site.
+- B2B strategic/key accounts and B2C erp_customers, each with a delivery site.
 - Timber, plasterboard, cement, insulation, and tools with realistic weights and units.
 - Inventory with intentionally constrained timber in Malmo and plasterboard in Gothenburg.
-- Orders containing one to three products, including bulky deliveries requiring crane trucks.
-- Fulfillments and deliveries linked to every generated order.
+- Orders containing one to three erp_products, including bulky tms_deliveries requiring crane trucks.
+- Fulfillments and tms_deliveries linked to every generated order.
 
 The constraints intentionally create useful events: stockouts, partial picks, changing delivery stages, and inventory depletion.
 
@@ -57,7 +57,7 @@ The initial migration uses `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX IF NOT
 Therefore this error is avoided:
 
 ```text
-ERROR: relation "distribution_centers" already exists
+ERROR: relation "wms_distribution_centers" already exists
 ```
 
 If Supabase still reports the migration as pending, first inspect the migration list:
@@ -111,7 +111,7 @@ The detailed daily seed data is in [scenarios/daily_business_day/seed.py](scenar
 python -m scripts.run_daily
 ```
 
-This clears all rows in dependency order, creates the master data and inventory, creates the day’s orders, then advances eight operational checkpoints. Query `operations.v_delivery_overview` in Supabase to observe the current stage.
+This clears all rows in dependency order, creates the master data and inventory, creates the dayÃ¢â‚¬â„¢s orders, then advances eight operational checkpoints. Query `operations.v_delivery_overview` in Supabase to observe the current stage.
 
 For focused development, the compatibility commands remain available:
 
@@ -152,18 +152,42 @@ SELECT cron.schedule(
 
 The function deletes only daily business data:
 
-- `commercial.sales_orders`
-- `commercial.sales_order_lines`
-- `operations.inventory_balances`
-- `operations.fulfillments`
-- `operations.fulfillment_lines`
-- `operations.deliveries`
+- `commercial.erp_sales_orders`
+- `commercial.erp_sales_order_lines`
+- `operations.wms_inventory_balances`
+- `operations.wms_fulfillments`
+- `operations.wms_fulfillment_lines`
+- `operations.tms_deliveries`
 
-It does not delete `core.customers`, `core.delivery_sites`, `core.products`, `core.carriers`, or `core.distribution_centers`.
+It does not delete `core.erp_customers`, `core.erp_delivery_sites`, `core.erp_products`, `core.tms_carriers`, or `core.wms_distribution_centers`.
 
 The scenario SQL is in [supabase/scenarios/daily_business_day.sql](supabase/scenarios/daily_business_day.sql), and the migration contains an inline copy in [20261106000002_daily_business_day.sql](supabase/migrations/20261106000002_daily_business_day.sql). The migration is intentionally duplicated because Supabase migration runners execute SQL and do not support `psql` meta-commands such as `\ir`.
 
 Use a trigger for event reactions such as creating a fulfillment after an order insert. Do not use a trigger as the daily clock: triggers run only when a row changes. `pg_cron` is the correct Supabase-native scheduler.
+
+## DelIQ fit review
+
+The current model is intentionally small but has the right subdomain boundaries:
+
+- `core`: master data owned by ERP/TMS, including `erp_customers`, `erp_delivery_sites`, `erp_products`, `wms_distribution_centers`, and `tms_carriers`.
+- `commercial`: ERP customer orders in `erp_sales_orders` and `erp_sales_order_lines`.
+- `operations`: WMS state in `wms_inventory_balances`, `wms_fulfillments`, and `wms_fulfillment_lines`, plus TMS state in `tms_deliveries`.
+
+This is enough for DelIQ to detect the hero short-pick and late-delivery journeys without turning the simulator into a full ERP, WMS, or TMS. The one-order/one-fulfilment/one-delivery assumption is also appropriate for the MVP.
+
+Recommended improvements, in priority order:
+
+1. Add an append-only `operations.event_log` with `event_type`, `source_system`, `entity_type`, `entity_id`, `occurred_at`, and `payload jsonb`. Keep the existing status tables as current state; DelIQ needs history to detect stalled handoffs and calculate detection rate.
+2. Add explicit `short_quantity` (or a derived shortage) to `operations.wms_fulfillment_lines`. `quantity_picked` plus `quantity_ordered` is enough mathematically, but a named shortage makes WMS exceptions and the demo query clearer.
+3. Add a small delivery milestone/event history for dispatch, ETA changes, failed attempts, and delivered. The current delivery columns remain the operational snapshot; history belongs in the event log rather than many nullable columns.
+4. Expand order and delivery status values only when a scenario needs them. Avoid modelling invoices, purchase orders, routes, driver rosters, or carrier integrations in this challenge.
+
+The DelIQ application database deliberately does not duplicate these source tables. It keeps source order/delivery identifiers and a small snapshot on each case so the control tower remains usable when the source platform is read-only or hosted separately.
+
+Table prefixes are explanatory rather than claims about a vendor product:
+`erp_*` represents order and customer master data, `wms_*` represents
+warehouse fulfilment and stock, and `tms_*` represents carrier and delivery
+execution.
 
 ## Recommended event extensions
 

@@ -12,12 +12,12 @@ SECURITY DEFINER
 SET search_path = public, core, commercial, operations
 AS $$
 BEGIN
-    DELETE FROM operations.deliveries;
-    DELETE FROM operations.fulfillment_lines;
-    DELETE FROM operations.fulfillments;
-    DELETE FROM commercial.sales_order_lines;
-    DELETE FROM commercial.sales_orders;
-    DELETE FROM operations.inventory_balances;
+    DELETE FROM operations.tms_deliveries;
+    DELETE FROM operations.wms_fulfillment_lines;
+    DELETE FROM operations.wms_fulfillments;
+    DELETE FROM commercial.erp_sales_order_lines;
+    DELETE FROM commercial.erp_sales_orders;
+    DELETE FROM operations.wms_inventory_balances;
 END;
 $$;
 
@@ -50,7 +50,7 @@ BEGIN
     PERFORM operations.reset_business_day();
 
     -- Rebuild starting inventory without changing the persistent master data.
-    INSERT INTO operations.inventory_balances (
+    INSERT INTO operations.wms_inventory_balances (
         distribution_center_id, product_id, on_hand_quantity, reserved_quantity
     )
     SELECT
@@ -66,48 +66,48 @@ BEGIN
             ELSE 25
         END,
         0
-    FROM core.distribution_centers dc
-    CROSS JOIN core.products p
+    FROM core.wms_distribution_centers dc
+    CROSS JOIN core.erp_products p
     WHERE p.is_active;
 
-    IF NOT EXISTS (SELECT 1 FROM core.customers)
-       OR NOT EXISTS (SELECT 1 FROM core.delivery_sites)
-       OR NOT EXISTS (SELECT 1 FROM core.distribution_centers)
-       OR NOT EXISTS (SELECT 1 FROM core.products)
-       OR NOT EXISTS (SELECT 1 FROM core.carriers) THEN
+    IF NOT EXISTS (SELECT 1 FROM core.erp_customers)
+       OR NOT EXISTS (SELECT 1 FROM core.erp_delivery_sites)
+       OR NOT EXISTS (SELECT 1 FROM core.wms_distribution_centers)
+       OR NOT EXISTS (SELECT 1 FROM core.erp_products)
+       OR NOT EXISTS (SELECT 1 FROM core.tms_carriers) THEN
         RAISE EXCEPTION 'Master data is incomplete; seed core tables before running the scenario';
     END IF;
 
     FOR customer_row IN
         SELECT c.*, series.sequence_no
         FROM generate_series(1, order_count) AS series(sequence_no)
-        JOIN core.customers c
+        JOIN core.erp_customers c
           ON c.id = (
               SELECT c2.id
-              FROM core.customers c2
+              FROM core.erp_customers c2
               ORDER BY c2.id
-              OFFSET ((series.sequence_no - 1) % (SELECT count(*) FROM core.customers))
+              OFFSET ((series.sequence_no - 1) % (SELECT count(*) FROM core.erp_customers))
               LIMIT 1
           )
         ORDER BY series.sequence_no
     LOOP
         SELECT ds.* INTO site_row
-        FROM core.delivery_sites ds
+        FROM core.erp_delivery_sites ds
         WHERE ds.customer_id = customer_row.id
         ORDER BY ds.id
         LIMIT 1;
 
         SELECT dc.* INTO center_row
-        FROM core.distribution_centers dc
+        FROM core.wms_distribution_centers dc
         ORDER BY dc.id
-        OFFSET ((customer_row.sequence_no - 1) % (SELECT count(*) FROM core.distribution_centers))
+        OFFSET ((customer_row.sequence_no - 1) % (SELECT count(*) FROM core.wms_distribution_centers))
         LIMIT 1;
 
         order_timestamp := date_trunc('day', now()) + make_interval(hours => 6 + (customer_row.sequence_no % 8));
         window_start := order_timestamp + interval '24 hours';
         order_number := format('SIM-%s-%s', to_char(current_date, 'YYYYMMDD'), lpad(customer_row.sequence_no::text, 4, '0'));
 
-        INSERT INTO commercial.sales_orders (
+        INSERT INTO commercial.erp_sales_orders (
             order_number, customer_id, delivery_site_id, distribution_center_id,
             ordered_at, promised_window_start, promised_window_end, status, currency
         )
@@ -122,14 +122,14 @@ BEGIN
         line_no := 0;
         FOR product_row IN
             SELECT p.*
-            FROM core.products p
+            FROM core.erp_products p
             WHERE p.is_active
             ORDER BY md5(p.sku || customer_row.sequence_no::text)
             LIMIT product_count
         LOOP
             line_no := line_no + 1;
             quantity := 2 + ((customer_row.sequence_no + line_no) % 11);
-            INSERT INTO commercial.sales_order_lines (
+            INSERT INTO commercial.erp_sales_order_lines (
                 sales_order_id, product_id, line_number, quantity_ordered, unit_price
             )
             VALUES (
@@ -144,22 +144,22 @@ BEGIN
             );
         END LOOP;
 
-        INSERT INTO operations.fulfillments (sales_order_id, status)
+        INSERT INTO operations.wms_fulfillments (sales_order_id, status)
         VALUES (order_id, 'PENDING')
         RETURNING id INTO fulfillment_id;
 
-        INSERT INTO operations.fulfillment_lines (fulfillment_id, sales_order_line_id)
+        INSERT INTO operations.wms_fulfillment_lines (fulfillment_id, sales_order_line_id)
         SELECT fulfillment_id, sol.id
-        FROM commercial.sales_order_lines sol
+        FROM commercial.erp_sales_order_lines sol
         WHERE sol.sales_order_id = order_id;
 
         SELECT car.* INTO carrier_row
-        FROM core.carriers car
+        FROM core.tms_carriers car
         ORDER BY car.id
-        OFFSET ((customer_row.sequence_no - 1) % (SELECT count(*) FROM core.carriers))
+        OFFSET ((customer_row.sequence_no - 1) % (SELECT count(*) FROM core.tms_carriers))
         LIMIT 1;
 
-        INSERT INTO operations.deliveries (
+        INSERT INTO operations.tms_deliveries (
             fulfillment_id, delivery_number, carrier_id, tracking_reference,
             vehicle_type, status, planned_dispatch_at, planned_eta
         )

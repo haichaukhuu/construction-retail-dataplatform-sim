@@ -7,20 +7,20 @@ from typing import Any
 from scripts.db import get_client, table
 
 TABLES_IN_DELETE_ORDER = (
-    ("operations", "deliveries"),
-    ("operations", "fulfillment_lines"),
-    ("operations", "fulfillments"),
-    ("commercial", "sales_order_lines"),
-    ("commercial", "sales_orders"),
-    ("operations", "inventory_balances"),
-    ("core", "delivery_sites"),
-    ("core", "customers"),
-    ("core", "products"),
-    ("core", "carriers"),
-    ("core", "distribution_centers"),
+    ("operations", "tms_deliveries"),
+    ("operations", "wms_fulfillment_lines"),
+    ("operations", "wms_fulfillments"),
+    ("commercial", "erp_sales_order_lines"),
+    ("commercial", "erp_sales_orders"),
+    ("operations", "wms_inventory_balances"),
+    ("core", "erp_delivery_sites"),
+    ("core", "erp_customers"),
+    ("core", "erp_products"),
+    ("core", "tms_carriers"),
+    ("core", "wms_distribution_centers"),
 )
 DELETE_KEYS = {
-    ("operations", "inventory_balances"): ("distribution_center_id", "product_id"),
+    ("operations", "wms_inventory_balances"): ("distribution_center_id", "product_id"),
 }
 
 

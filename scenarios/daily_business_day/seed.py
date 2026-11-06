@@ -32,12 +32,12 @@ def seed_master_data(client: Any) -> dict[str, list[dict[str, Any]]]:
         {"code": "DC-GOT", "name": "Gothenburg DC", "city": "Gothenburg", "country_code": "SE"},
         {"code": "DC-MAL", "name": "Malmo DC", "city": "Malmo", "country_code": "SE"},
     ]
-    carriers = [
+    tms_carriers = [
         {"code": "NORDIC-LOG", "name": "Nordic Logistics AB"},
         {"code": "BYGG-EXPRESS", "name": "Bygg Express AB"},
         {"code": "SKANDI-FREIGHT", "name": "Skandi Freight AB"},
     ]
-    products = [
+    erp_products = [
         {"sku": "TRB-45X95-3600", "name": "Construction timber 45x95 mm, 3.6 m", "category": "TIMBER", "unit_of_measure": "EACH", "unit_weight_kg": 8.2, "is_bulky": True},
         {"sku": "TRB-45X145-4800", "name": "Construction timber 45x145 mm, 4.8 m", "category": "TIMBER", "unit_of_measure": "EACH", "unit_weight_kg": 16.4, "is_bulky": True},
         {"sku": "GYP-13-1200X2400", "name": "Gypsum board 13 mm, 1200x2400", "category": "PLASTERBOARD", "unit_of_measure": "SHEET", "unit_weight_kg": 28.0, "is_bulky": True},
@@ -45,7 +45,7 @@ def seed_master_data(client: Any) -> dict[str, list[dict[str, Any]]]:
         {"sku": "ISO-100-1200", "name": "Mineral wool insulation 100 mm", "category": "INSULATION", "unit_of_measure": "SHEET", "unit_weight_kg": 6.5, "is_bulky": True},
         {"sku": "TOOL-LASER", "name": "Cross-line laser level", "category": "TOOLS", "unit_of_measure": "EACH", "unit_weight_kg": 1.8, "is_bulky": False},
     ]
-    customers = [
+    erp_customers = [
         {"customer_number": "C-10001", "name": "Nordbygg Entreprenad AB", "customer_type": "B2B", "tier": "STRATEGIC", "sla_hours": 24, "email": "inkop@nordbygg.example", "phone": "+46 8 555 10001", "preferred_language": "sv"},
         {"customer_number": "C-10002", "name": "Vastkust Byggpartner AB", "customer_type": "B2B", "tier": "KEY", "sla_hours": 48, "email": "order@vastkust.example", "phone": "+46 31 555 10002", "preferred_language": "sv"},
         {"customer_number": "C-10003", "name": "Malmohus Projekt AB", "customer_type": "B2B", "tier": "KEY", "sla_hours": 48, "email": "projekt@malmohus.example", "phone": "+46 40 555 10003", "preferred_language": "sv"},
@@ -54,10 +54,10 @@ def seed_master_data(client: Any) -> dict[str, list[dict[str, Any]]]:
     ]
 
     seeded = {
-        "centers": [upsert_one(client, "core", "distribution_centers", row, "code") for row in centers],
-        "carriers": [upsert_one(client, "core", "carriers", row, "code") for row in carriers],
-        "products": [upsert_one(client, "core", "products", row, "sku") for row in products],
-        "customers": [upsert_one(client, "core", "customers", row, "customer_number") for row in customers],
+        "centers": [upsert_one(client, "core", "wms_distribution_centers", row, "code") for row in centers],
+        "tms_carriers": [upsert_one(client, "core", "tms_carriers", row, "code") for row in tms_carriers],
+        "erp_products": [upsert_one(client, "core", "erp_products", row, "sku") for row in erp_products],
+        "erp_customers": [upsert_one(client, "core", "erp_customers", row, "customer_number") for row in erp_customers],
     }
 
     sites = [
@@ -68,12 +68,12 @@ def seed_master_data(client: Any) -> dict[str, list[dict[str, Any]]]:
         ("C-20002", {"site_name": "Villa renovation", "address_line": "Sankt Sigfrids Plan 2", "postcode": "412 65", "city": "Gothenburg", "access_notes": "Call on arrival.", "contact_name": "Erik Johansson", "contact_phone": "+46 70 555 20002"}),
     ]
     for customer_number, site in sites:
-        customer = next(c for c in seeded["customers"] if c["customer_number"] == customer_number)
-        existing = table(client, "core", "delivery_sites").select("*").eq("customer_id", customer["id"]).eq("address_line", site["address_line"]).limit(1).execute().data
+        customer = next(c for c in seeded["erp_customers"] if c["customer_number"] == customer_number)
+        existing = table(client, "core", "erp_delivery_sites").select("*").eq("customer_id", customer["id"]).eq("address_line", site["address_line"]).limit(1).execute().data
         if existing:
             site_row = existing[0]
         else:
-            site_row = table(client, "core", "delivery_sites").insert({"customer_id": customer["id"], **site}).execute().data[0]
+            site_row = table(client, "core", "erp_delivery_sites").insert({"customer_id": customer["id"], **site}).execute().data[0]
         seeded.setdefault("sites", []).append(site_row)
     return seeded
 
@@ -81,8 +81,8 @@ def seed_master_data(client: Any) -> dict[str, list[dict[str, Any]]]:
 def seed_inventory(client: Any, master: dict[str, list[dict[str, Any]]]) -> None:
     base_stock = {"TIMBER": 120, "PLASTERBOARD": 80, "CEMENT": 300, "INSULATION": 100, "TOOLS": 25}
     for center in master["centers"]:
-        for product in master["products"]:
-            existing = table(client, "operations", "inventory_balances").select(
+        for product in master["erp_products"]:
+            existing = table(client, "operations", "wms_inventory_balances").select(
                 "distribution_center_id"
             ).eq("distribution_center_id", center["id"]).eq("product_id", product["id"]).limit(1).execute().data
             if existing:
@@ -95,47 +95,47 @@ def seed_inventory(client: Any, master: dict[str, list[dict[str, Any]]]) -> None
             upsert_one(
                 client,
                 "operations",
-                "inventory_balances",
+                "wms_inventory_balances",
                 {"distribution_center_id": center["id"], "product_id": product["id"], "on_hand_quantity": quantity, "reserved_quantity": 0},
                 "distribution_center_id,product_id",
             )
 
 
 def seed_orders(client: Any, master: dict[str, list[dict[str, Any]]], count: int = 30) -> None:
-    existing = table(client, "commercial", "sales_orders").select("order_number").like("order_number", "SIM-%").execute().data
+    existing = table(client, "commercial", "erp_sales_orders").select("order_number").like("order_number", "SIM-%").execute().data
     start_number = len(existing) + 1
     centers = master["centers"]
-    products = master["products"]
+    erp_products = master["erp_products"]
     for number in range(start_number, start_number + count):
-        customer = RNG.choice(master["customers"])
+        customer = RNG.choice(master["erp_customers"])
         site = next(s for s in master["sites"] if s["customer_id"] == customer["id"])
         center = min(centers, key=lambda item: abs(["Stockholm", "Gothenburg", "Malmo"].index(item["city"]) - ["Stockholm", "Gothenburg", "Malmo"].index(site["city"])))
         ordered_at = NOW - timedelta(hours=RNG.randint(1, 120))
         window_start = ordered_at + timedelta(hours=RNG.randint(24, 48))
-        order = upsert_one(client, "commercial", "sales_orders", {
+        order = upsert_one(client, "commercial", "erp_sales_orders", {
             "order_number": f"SIM-{number:05d}", "customer_id": customer["id"], "delivery_site_id": site["id"],
             "distribution_center_id": center["id"], "ordered_at": ordered_at.isoformat(),
             "promised_window_start": window_start.isoformat(), "promised_window_end": (window_start + timedelta(hours=4)).isoformat(),
             "status": "CONFIRMED", "currency": "SEK",
         }, "order_number")
         line_count = RNG.randint(1, 3)
-        chosen = RNG.sample(products, line_count)
+        chosen = RNG.sample(erp_products, line_count)
         for line_number, product in enumerate(chosen, start=1):
             quantity = RNG.randint(2, 12)
             unit_price = {"TIMBER": 89, "PLASTERBOARD": 149, "CEMENT": 79, "INSULATION": 119, "TOOLS": 899}[product["category"]]
-            table(client, "commercial", "sales_order_lines").upsert({
+            table(client, "commercial", "erp_sales_order_lines").upsert({
                 "sales_order_id": order["id"], "product_id": product["id"], "line_number": line_number,
                 "quantity_ordered": quantity, "unit_price": unit_price,
             }, on_conflict="sales_order_id,product_id").execute()
-        lines = table(client, "commercial", "sales_order_lines").select("id").eq("sales_order_id", order["id"]).execute().data
-        fulfillment = upsert_one(client, "operations", "fulfillments", {"sales_order_id": order["id"], "status": "PENDING"}, "sales_order_id")
+        lines = table(client, "commercial", "erp_sales_order_lines").select("id").eq("sales_order_id", order["id"]).execute().data
+        fulfillment = upsert_one(client, "operations", "wms_fulfillments", {"sales_order_id": order["id"], "status": "PENDING"}, "sales_order_id")
         for line in lines:
-            table(client, "operations", "fulfillment_lines").upsert(
+            table(client, "operations", "wms_fulfillment_lines").upsert(
                 {"fulfillment_id": fulfillment["id"], "sales_order_line_id": line["id"], "quantity_picked": 0},
                 on_conflict="fulfillment_id,sales_order_line_id",
             ).execute()
-        carrier = RNG.choice(master["carriers"])
-        table(client, "operations", "deliveries").upsert({
+        carrier = RNG.choice(master["tms_carriers"])
+        table(client, "operations", "tms_deliveries").upsert({
             "fulfillment_id": fulfillment["id"], "delivery_number": f"DEL-SIM-{number:05d}",
             "carrier_id": carrier["id"], "tracking_reference": f"SE{number:010d}",
             "vehicle_type": "CRANE_TRUCK" if any(p["is_bulky"] for p in chosen) else "VAN",
