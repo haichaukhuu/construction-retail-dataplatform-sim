@@ -1,0 +1,6 @@
+customer_number,name,customer_type,tier,sla_hours,email,phone,preferred_language
+C-10001,Nordbygg Entreprenad AB,B2B,STRATEGIC,24,inkop@nordbygg.example,+46 8 555 10001,sv
+C-10002,Vastkust Byggpartner AB,B2B,KEY,48,order@vastkust.example,+46 31 555 10002,sv
+C-10003,Malmohus Projekt AB,B2B,KEY,48,projekt@malmohus.example,+46 40 555 10003,sv
+C-20001,Anna Lindstrom,B2C,STANDARD,72,anna.lindstrom@example,+46 70 555 20001,sv
+C-20002,Erik Johansson,B2C,STANDARD,72,erik.johansson@example,+46 70 555 20002,en

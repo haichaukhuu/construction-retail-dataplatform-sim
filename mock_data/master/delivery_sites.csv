@@ -1,0 +1,6 @@
+customer_number,site_name,address_line,postcode,city,access_notes,contact_name,contact_phone
+C-10001,North Harbor project,Hammarby Kaj 12,120 30,Stockholm,Crane truck must call 30 minutes ahead.,Lars Berg,+46 70 600 1001
+C-10002,Lindholmen site,Lindholmspiren 5,417 56,Gothenburg,Delivery before 15:00 only.,Sara Nilsson,+46 70 600 1002
+C-10003,Soder project,Sodra Forstadsgatan 44,211 43,Malmo,Use entrance B.,Oskar Ek,+46 70 600 1003
+C-20001,Private renovation,Birkagatan 8,113 39,Stockholm,Small van preferred.,Anna Lindstrom,+46 70 555 20001
+C-20002,Villa renovation,Sankt Sigfrids Plan 2,412 65,Gothenburg,Call on arrival.,Erik Johansson,+46 70 555 20002

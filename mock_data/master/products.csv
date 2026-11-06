@@ -1,0 +1,7 @@
+sku,name,category,unit_of_measure,unit_weight_kg,is_bulky
+TRB-45X95-3600,"Construction timber 45x95 mm, 3.6 m",TIMBER,EACH,8.2,True
+TRB-45X145-4800,"Construction timber 45x145 mm, 4.8 m",TIMBER,EACH,16.4,True
+GYP-13-1200X2400,"Gypsum board 13 mm, 1200x2400",PLASTERBOARD,SHEET,28.0,True
+CEM-25,General purpose cement 25 kg,CEMENT,BAG,25.0,False
+ISO-100-1200,Mineral wool insulation 100 mm,INSULATION,SHEET,6.5,True
+TOOL-LASER,Cross-line laser level,TOOLS,EACH,1.8,False
