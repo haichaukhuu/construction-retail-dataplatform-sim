@@ -9,6 +9,10 @@ schemas = ["core", "commercial", "operations"]
 [db]
 port = 54322
 
+[db.seed]
+enabled = true
+sql_paths = ["./seed/01_master_data.sql", "./seed/02_events.sql"]
+
 [studio]
 enabled = true
 port = 54323
