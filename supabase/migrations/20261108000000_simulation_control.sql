@@ -6,7 +6,7 @@ BEGIN
     IF to_regnamespace('operations') IS NULL
        OR to_regprocedure('operations.run_daily_business_day(integer)') IS NULL THEN
         RAISE EXCEPTION
-            'Prerequisite migration 20261106000002_daily_business_day is missing or incomplete; apply the initial and daily migrations before simulation control';
+            'Prerequisite daily simulation objects are missing; apply the schema and daily simulation migrations before simulation control';
     END IF;
 END;
 $$;
