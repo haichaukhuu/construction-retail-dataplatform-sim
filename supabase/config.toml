@@ -1,17 +1,24 @@
 # Local Supabase CLI configuration.
 # Link to a hosted project explicitly with:
 # supabase link --project-ref <your-project-ref>
+project_id = "construction-retail-dataplatform-sim"
 
 [api]
 enabled = true
+port = 54321
+
 schemas = ["core", "commercial", "operations"]
 
 [db]
 port = 54322
 
+# [db.vault]
+# secret_key = "env(SECRET_VALUE)"
+
 [db.seed]
 enabled = true
-sql_paths = ["./seed/01_master_data.sql", "./seed/02_events.sql"]
+# sql_paths = ["./seed/01_master_data.sql", "./seed/02_events.sql"]
+sql_paths = ["./seed.sql"]
 
 [studio]
 enabled = true
