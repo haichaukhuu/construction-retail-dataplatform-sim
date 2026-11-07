@@ -1,6 +1,16 @@
 -- Controls the database-native business-day simulation without changing
 -- fixed master data or requiring a migration edit.
 
+DO $$
+BEGIN
+    IF to_regnamespace('operations') IS NULL
+       OR to_regprocedure('operations.run_daily_business_day(integer)') IS NULL THEN
+        RAISE EXCEPTION
+            'Prerequisite migration 20261106000002_daily_business_day is missing or incomplete; apply the initial and daily migrations before simulation control';
+    END IF;
+END;
+$$;
+
 CREATE TABLE IF NOT EXISTS operations.simulation_settings (
     setting_key TEXT PRIMARY KEY,
     business_day_simulation_enabled BOOLEAN NOT NULL DEFAULT TRUE,

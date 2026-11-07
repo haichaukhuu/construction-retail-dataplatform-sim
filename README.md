@@ -123,6 +123,28 @@ If the existing schema differs, do not baseline it. Create a new migration conta
 supabase db push
 ```
 
+The migration `20261107000000_simulation_control.sql` depends on both earlier
+migrations. If deployment reports that schema `operations` is missing, inspect
+the hosted migration history before retrying:
+
+```powershell
+supabase migration list --remote
+```
+
+For a disposable project whose migration history says the earlier migrations
+are applied but the schemas are missing, repair the history and reapply them:
+
+```powershell
+supabase migration repair --status reverted 20261107000000
+supabase migration repair --status reverted 20261106000002
+supabase migration repair --status reverted 20261106000000
+supabase db push --remote <project-ref> --yes
+```
+
+Only use this repair sequence for the disposable simulator project, after
+confirming that no data must be preserved. Do not mark a migration as applied
+when its schema objects are absent.
+
 ## Setup
 
 1. Connect the repository using the Supabase GitHub Integration.
