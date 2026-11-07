@@ -1,0 +1,33 @@
+name: Run business-day simulation
+
+on:
+  workflow_dispatch:
+    inputs:
+      order_count:
+        description: Number of orders to generate (1-500)
+        required: false
+        default: "30"
+  schedule:
+    - cron: "0 1 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    if: github.event_name == 'schedule' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: node scripts/run_business_day.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          BUSINESS_DAY_ORDER_COUNT: ${{ inputs.order_count || '30' }}

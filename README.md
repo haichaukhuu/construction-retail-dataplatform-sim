@@ -77,8 +77,9 @@ supabase migration repair --status applied 20261106000000
 `supabase db push` applies migrations only; it does not run seed files. The
 seed files are configured for `supabase db reset` and run in this order:
 
-1. `supabase/seed/01_master_data.sql`
-2. `supabase/seed/02_events.sql`
+1. `supabase/seed/00_simulation_config.sql`
+2. `supabase/seed/01_master_data.sql`
+3. `supabase/seed/02_events.sql`
 
 ### Recreating dropped schemas
 
@@ -125,7 +126,10 @@ supabase db push
 ## Setup
 
 1. Connect the repository using the Supabase GitHub Integration.
-2. Copy `.env.example` to `.env` and set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
+2. Copy `.env.example` to `.env` and set `SUPABASE_URL` plus the server-side key
+   required by the command you run. The Python runner uses
+   `SUPABASE_SERVICE_ROLE_KEY`; the Node GitHub Actions runner uses
+   `SUPABASE_SECRET_KEY`.
 3. Install dependencies:
 
 ```powershell
@@ -167,12 +171,71 @@ python -m scripts.simulate --steps 1
 1. **Supabase GitHub Integration** deploys schema and scenario functions from `supabase/migrations`.
 2. **Supabase `pg_cron`** runs the daily business scenario inside the database.
 3. **Python scripts** remain optional local development tools and are not required in production.
+4. **GitHub Actions** deploy migrations and can invoke the guarded simulation
+   RPC without running the local Python tools.
 
-No GitHub Actions pipeline is required for daily simulation.
+### Configure GitHub Actions secrets
+
+Create a GitHub environment named `production`:
+
+1. Open the repository on GitHub.
+2. Go to **Settings > Environments > New environment**.
+3. Name it `production`.
+4. Optionally add required reviewers before production workflows can run.
+5. Add these environment secrets under **Environment secrets**:
+
+| Secret | Used by | Value |
+|---|---|---|
+| `SUPABASE_ACCESS_TOKEN` | Migration deployment | Personal access token from Supabase account settings |
+| `SUPABASE_PROJECT_ID` | Migration deployment | Hosted Supabase project reference |
+| `SUPABASE_DB_PASSWORD` | Migration deployment | Database password for the hosted project |
+| `SUPABASE_URL` | Simulation runner | Project URL from Supabase Connect/API settings |
+| `SUPABASE_SECRET_KEY` | Simulation runner | Server-side secret/service-role key |
+
+The workflow files reference the `production` environment, so these secrets are
+not available to unrelated jobs or pull requests. Never put any of these values
+in `config.toml`, migrations, seed files, committed `.env` files, or frontend
+code. The secret key bypasses RLS and is used only by the trusted scheduled
+workflow to call the guarded `operations.run_daily_business_day` function.
+
+After adding the secrets, use **Actions > Deploy Supabase migrations > Run
+workflow** on `main`. Once the migration succeeds, use **Actions > Run
+business-day simulation > Run workflow** to test a manual run with an order
+count between 1 and 500.
+
+### Switch the business-day simulation
+
+The database-native simulation is controlled by one metadata row in
+`operations.simulation_settings`. The seeded default is enabled. Turning it
+off makes `operations.run_daily_business_day()` return `0` without deleting or
+creating business-day data:
+
+```sql
+SELECT operations.set_business_day_simulation(FALSE, NULL, 'operator');
+SELECT operations.is_business_day_simulation_enabled();
+SELECT operations.set_business_day_simulation(TRUE, 30, 'operator');
+```
+
+The optional order-count argument updates the configured order volume only when
+supplied. Values from 1 to 500 are accepted. Schedules must call
+`operations.run_daily_business_day()` rather than the internal
+`operations.run_daily_business_day_unchecked()` function, so the switch is
+always respected.
+
+### Metadata-driven structure
+
+`mock_data/` is the canonical fixed catalog and event metadata. The generated
+files in `supabase/seed/` and `supabase/scenarios/` are deployment artifacts and
+must be regenerated with `python -m scripts.build_sql`, not edited by hand.
+Migrations contain schema, views, and database functions. Runtime switches
+belong in `operations.simulation_settings`; secrets belong in environment
+variables referenced through Supabase `config.toml`, never in migrations or
+seed data.
 
 ## Database-native daily scenario
 
-The scenario can run entirely inside Supabase without GitHub Actions:
+The scenario can run entirely inside Supabase or through the trusted GitHub
+Actions runner:
 
 1. Enable the `pg_cron` extension in **Database > Extensions**.
 2. Apply the migration that installs the scenario function.
@@ -188,7 +251,7 @@ SELECT operations.refresh_demo_environment();
 SELECT cron.schedule(
   'construction-retail-daily-simulation',
   '0 1 * * *',
-  $$SELECT operations.run_daily_business_day(30);$$
+  $$SELECT operations.run_daily_business_day();$$
 );
 ```
 

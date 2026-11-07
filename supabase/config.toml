@@ -17,8 +17,11 @@ port = 54322
 
 [db.seed]
 enabled = true
-# sql_paths = ["./seed/01_master_data.sql", "./seed/02_events.sql"]
-sql_paths = ["./seed.sql"]
+sql_paths = [
+  "./seed/00_simulation_config.sql",
+  "./seed/01_master_data.sql",
+  "./seed/02_events.sql",
+]
 
 [studio]
 enabled = true
